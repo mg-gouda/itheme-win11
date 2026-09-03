@@ -1,0 +1,16 @@
+# Editable GIMP source files are large and binary — track via Releases/LFS later if needed, not plain git
+*.xcf~
+
+# OS clutter
+Thumbs.db
+desktop.ini
+.DS_Store
+
+# Windows Zone.Identifier ADS metadata (download markers, not project content)
+*:Zone.Identifier
+
+# Build output
+release/*.zip
+
+# Editor
+.vscode/
