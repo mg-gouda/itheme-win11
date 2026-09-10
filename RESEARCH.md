@@ -33,17 +33,20 @@ the technical foundation for Phase 3.
 | AMAP | 1 | Alpha map — likely opacity/blend table |
 | BCMAP | ? | Border/color map (not yet explored) |
 | CMAP | ? | Color map (not yet explored) |
-| DESKTOP | ? | Desktop-related settings (not yet explored) |
+| DESKTOP | 4 bytes | Tiny flag/metadata, not explored further |
 | IMAGE | 1611 | The actual PNG bitmaps. IDs run 508–2125 (with gaps), all sub-ID 1033 (LANGID for en-US) |
-| IMMERSIVE | 1 | Single UCS-2/binary resource — modern Fluent/WinUI theming data (see below) |
-| MINCOLORDEPTH | 1 | Minimum color depth requirement |
-| MUI | ? | Localized strings (not yet explored) |
-| PACKTHEM_VERSION | ? | Theme package version metadata |
-| PVL | ? | Not yet explored |
-| RMAP | ? | Resource map — likely PART/STATE → IMAGE ID lookup (not yet explored) |
-| STREAM | ? | Binary theme definition data — the actual "compiled style". Not human-readable in Resource Hacker; this is where PART/STATE really gets tied to IMAGE IDs |
-| VARIANT | ? | Color/size variant definitions |
-| VMAP | ? | Not yet explored |
+| IMMERSIVE | 4 bytes | Tiny flag/version marker — **not** a Fluent/WinUI theming blob (see correction below) |
+| MINCOLORDEPTH | 2 bytes | Minimum color depth requirement |
+| MUI | 400 bytes | Localized strings — contains resource-type name strings (`AMAP`, `BCMAP`, ...), likely a self-describing schema table |
+| PACKTHEM_VERSION | 2 bytes | Theme package version metadata |
+| PVL | 4 bytes | Not yet explored, tiny |
+| RMAP | 488 bytes | Just metadata strings (`Aero`, `12-xx-2004`) — a version/name stamp, not a lookup table |
+| STREAM | 3 resources, ~70–95KB each | **These are large PNG image atlases** (confirmed via `IHDR`/`IDAT` PNG chunk signatures) — not property/definition data. Likely packed multi-element textures, one per size/DPI variant |
+| VARIANT | 449KB (`NORMAL`) | **This is the real compiled theme property data** — the binary "class data file" described in Microsoft's own patent (see below). Almost all binary, near-zero readable strings — class/part/state/property IDs are numeric, not string names |
+| VMAP | 76 bytes | Variant name list: `Normal`, `NormalSize`, `NormalColor` — matches `.theme`'s `ColorStyle=NormalColor`/`Size=NormalSize` |
+| CMAP | 18.7KB | **Class name catalog** — plain UTF-16LE strings, human-readable, extremely informative (see below) |
+| AMAP | 41KB | Not yet explored |
+| BCMAP | 1.5KB | Not yet explored |
 | Version Info | 1 | Standard PE version resource |
 
 **No `BITMAP` or `String Table` resource types exist in this file at all.**
@@ -51,50 +54,110 @@ Everything visual is a PNG under `IMAGE`. Color strings (`ActiveTitle`,
 `ButtonFace`, etc.) live in the `.theme` INI file instead, not inside the
 `.msstyles` binary — that part of the original plan is correct.
 
+**Correction to an earlier note in this file:** an initial pass through this
+research (see git history) guessed at what `STREAM`, `RMAP`, and `IMMERSIVE`
+contained based on their names alone, and concluded from *visually sampling
+25 of 1611 `IMAGE` entries in Resource Hacker* that DWM must be compositing
+window chrome from accent color with no msstyles-side bitmap involved at
+all. That visual-sampling conclusion is now **superseded** by the extraction
+below, which is evidence-based rather than a guess — read on.
+
 ---
 
-## IMPORTANT: theme format reality check
+## Extracting and reading the binary resources directly (not just Resource Hacker)
 
-Windows 11's `aero.msstyles` is **not** simple "one bitmap per UI element"
-like classic visual styles. Sampled ~25 of the 1611 `IMAGE` entries by paging
-through Resource Hacker (IDs 508 through 2125):
+Rather than continuing to page through 1611 unnamed images by eye, extracted
+the raw resource bytes directly using Python's `pefile` library (installed
+via `pip install pefile` — `aero.msstyles` is a valid PE file underneath the
+custom extension) and searched for embedded strings. Script at
+`scratchpad` (not committed — one-off analysis, not project tooling).
 
-- Low IDs (508–650ish): checkbox / radio button / expander-arrow sprite
-  sheets — multiple states stacked vertically in one PNG (e.g. ID 508 is a
-  13×260 PNG containing unchecked/checked/indeterminate/hover states for a
-  checkbox). **These are genuinely swappable, matches the original plan.**
-- Mid-to-high IDs (1000+): shrink down to small glyphs (chevrons, arrows,
-  9×15px dropdown indicators) and eventually to **1×1 and 2×1 pixel PNGs** —
-  these are solid-color fill swatches, not graphics.
-- **No large title-bar-sized or window-border-sized bitmaps were found
-  anywhere in the sampled range.** Classic Aero glass (Vista/7) rendered
-  title bars from big pre-drawn bitmaps; Windows 11 does not work that way.
+**Reference used:** Microsoft's own patent
+[US7137066B2](https://patents.google.com/patent/US7137066B2) — "Binary
+cache file format for themeing the visual appearance of a computer system"
+— describes the exact `.msstyles` compiled binary structure: a header,
+class index section, and hierarchical property sections (state → part →
+class → global, most-specific-first) made of `property data item` records
+(derived property ID, primitive property ID, data length, data). Two
+property types matter most here:
+- **Imagefile properties**: reference a bitmap via **9-slice/9-grid
+  stretching** — "sizing margins" and "content margins" let a *small*
+  source image (not necessarily anywhere near the rendered element's full
+  size) stretch to fill any width/height. This directly invalidates the
+  "no bitmap is wide enough to be a title bar" reasoning from the earlier
+  visual-sampling pass — a 9-sliced title bar source image could be as
+  small as ~40px wide.
+- **Color properties**: plain `R,G,B` triples, used directly or via a
+  "sampled colors" optimization table for solid-color elements (this is
+  almost certainly what the 1×1/2×1 px PNG "fill swatches" found earlier
+  actually are — legitimate solid-fill assets, not junk/leftovers).
 
-**What this means:** window chrome (title bar, window border, the colored
-strip behind the caption buttons) is composited by DWM at runtime from
-accent-color settings and the `IMMERSIVE` resource (modern Fluent theming
-data, serialized as UCS-2/binary — not a simple bitmap or readable XML in
-Resource Hacker's text view), not from a paintable bitmap image the way
-`ASSETS.md`'s `title-bar-active.xcf` / `window-border-active.xcf` entries
-assume. Recoloring the title bar almost certainly means editing small
-fill-color swatches and/or `.theme` `[Colors]` values and DWM accent
-settings, **not** drawing a custom 800×30 title bar graphic in GIMP.
+### What `CMAP` revealed (the actual breakthrough)
 
-**Tool note:** [msstyleEditor](https://github.com/nptr/msstyleEditor)
-(community tool, MIT, supports Vista–11) fails to open this exact file with
-`Error loading style! ... Style contains no class map!` — likely a version
-mismatch between the tool (last release tag `2.1.2.0`) and this Windows 11
-25H2 build's compiled style format. Installed at
-`C:\Users\Gouda\Tools\msstyleEditor\` in the VM in case a future version
-fixes this — worth retrying if the tool gets updated.
+`CMAP` (18.7KB) is almost entirely plain UTF-16LE strings — a **catalog of
+every class name** the theme defines, including many namespaced variants.
+Extracted and grepped around the window-related entries:
 
-**Before starting Phase 3 (Base Theme Build), re-scope which elements are
-realistically bitmap-editable** (checkboxes, radio buttons, scrollbar
-thumbs/arrows, button states, menu separators/arrows — all confirmed as
-swappable sprite sheets) **vs. which need a DWM/accent-color/fill-swatch
-approach instead** (title bar, window border, taskbar background). This
-probably means revising `ASSETS.md`'s asset list before Phase 3, not just
-filling in IDs for what's already listed there.
+```
+14280  Window
+14296  DWMWindow
+14320  DWMTouch
+14344  DWMPen
+14360  CompositedWindow::Window
+```
+
+**This confirms the DWM theory directly and concretely, with an important
+nuance:** window chrome is controlled by dedicated classes named
+`DWMWindow` / `CompositedWindow::Window` (plus touch/pen input variants
+`DWMTouch`/`DWMPen`) — **separate from** a plain `Window` class. Windows 11
+runs DWM composition essentially always, so **the classes that matter for
+this project's title bar/window chrome work are `DWMWindow` and
+`CompositedWindow::Window`, not `Window`.** These classes almost certainly
+have their own Imagefile and/or Color properties per the patent structure
+above — meaning **bitmap-based (or simple color-based) title bar theming
+is plausible after all**, just under a different, DWM-specific class than
+a naive search would find first.
+
+**Second major finding — dark/light mode lives in this same file.** The
+class catalog is full of namespaced variants:
+
+```
+DarkMode_DarkTheme::Button / TreeView / Link
+DarkMode_Explorer::Pause / TreeView
+DarkMode::ExplorerNavPane / ReadingPane / Menu / CommonItemsDialog / ProperTree
+LightMode_ImmersiveStart::Menu
+DarkMode_ImmersiveStart::Menu
+ImmersiveStartDark::Menu
+```
+
+Windows 11's light/dark mode switching (and the Start menu's Fluent
+"Immersive" styling) is **not** a separate mechanism or separate file —
+it's the same `aero.msstyles`, with dark-mode-specific class variants
+living alongside the light/default ones, distinguished by name prefix.
+**This has a real implication for this project's Dark/Light/Colorful
+variant plan**: rather than (or possibly in addition to) building three
+separate `.msstyles` files, it may be possible/necessary to target the
+`DarkMode_*` namespaced classes directly within one file for a proper dark
+variant. Needs more investigation before Phase 3 planning locks this down.
+
+### What's still unknown
+
+- The exact byte layout connecting a `CMAP` class-name string to its
+  numeric class ID, and from there to the `VARIANT_NORMAL` property
+  records and the specific `IMAGE` resource IDs / colors it uses. The
+  patent describes the structure at a high level (header → class index →
+  hierarchical property sections) but not exact byte offsets — would need
+  either a full clean-room parser, or a working alternative to
+  `msstyleEditor` that understands this Windows 11 build's exact format.
+- Whether `DWMWindow`/`CompositedWindow::Window` use Imagefile (bitmap)
+  properties, Color properties, or both for the caption/frame/buttons.
+
+**Practical next step before Phase 3:** don't keep manually paging through
+`IMAGE` entries by eye — it's unreliable (already proven wrong once). Try
+newer/alternate `.msstyles` editing tools against this exact file, or budget
+time for a proper `VARIANT_NORMAL` binary parser using the patent as a
+spec. Either would give a direct class name → part → image ID mapping
+instead of continued guessing.
 
 ---
 

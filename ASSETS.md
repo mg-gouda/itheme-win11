@@ -7,11 +7,40 @@ Status codes: `⬜ Not started` · `🔨 In progress` · `✅ Done` · `⏭ Skip
 
 ---
 
+## ⚠️ Open questions from Phase 1 research (read before Phase 3)
+
+Binary analysis of `aero.msstyles` (see `RESEARCH.md`) found two things that
+affect this whole file before real asset production starts:
+
+1. **Window chrome is controlled by `DWMWindow`/`CompositedWindow::Window`
+   classes, not a plain `Window` class.** These likely use small 9-sliced
+   images and/or plain color properties (per Microsoft's own patent on the
+   format) rather than one big pre-drawn title-bar bitmap — but the exact
+   IMAGE IDs / dimensions these classes reference are still unknown. The
+   `Window Chrome` and `Taskbar` sections below (dimensions, per-element
+   `.xcf` breakdown) are the **original plan's assumptions, not yet
+   confirmed against the real file** — treat as provisional until Phase 2/3
+   research nails down what `DWMWindow` actually needs.
+2. **Dark/light mode variants live inside the *same* `aero.msstyles` file**
+   via namespaced classes (`DarkMode_DarkTheme::Button`,
+   `LightMode_ImmersiveStart::Menu`, etc.), not separate files. This is a
+   real open question for the Dark/Light/Colorful plan: build three
+   separate `.msstyles` files as originally planned (simpler, but ignores
+   how Windows 11 itself organizes this), or target the namespaced classes
+   within one file? Needs a decision before Phase 3, not during it.
+
+---
+
 ## Bitmap Assets (GIMP source → .xcf in assets/source/)
 
 Each .xcf is exported three times — once per variant — into assets/dark/, assets/light/, assets/colorful/.
 
 ### Window Chrome
+
+> ⚠️ See the open-questions box above — dimensions and even the basic
+> "one bitmap per element" shape of this section are unconfirmed against
+> the real `DWMWindow`/`CompositedWindow::Window` class data. Keeping the
+> original plan below as a starting point, not a confirmed spec.
 
 | Source file | Dimensions | Variants | Dark | Light | Colorful |
 |---|---|---|---|---|---|
@@ -82,6 +111,12 @@ Each .xcf is exported three times — once per variant — into assets/dark/, as
 | `menu-submenu-arrow.xcf` | TBD × TBD | ⬜ | ⬜ | ⬜ |
 
 ### Taskbar
+
+> ⚠️ Same caveat as Window Chrome — the taskbar is very likely an
+> "immersive"/Fluent-composited element (CMAP showed `ImmersiveStart::Menu`
+> and similar namespaced classes for the Start menu; the taskbar is probably
+> analogous), not a plain bitmap background. Unconfirmed — needs the same
+> follow-up research as window chrome before treating this as final.
 
 | Source file | Dimensions | Dark | Light | Colorful |
 |---|---|---|---|---|
