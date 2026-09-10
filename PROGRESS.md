@@ -20,14 +20,23 @@ Blocker:  None
 > Update this block every few sessions so Claude has instant context.
 
 ```
-Last worked on : 2026-09-03
-Last completed : Folder scaffold run, Git repo initialized, Python 3.12 +
-                 GIMP installed globally, package-release.py written
-Currently on   : Phase 1 — VM/VirtualBox/Resource Hacker/SecureUxTheme
-                 setup still needed (deliberately left manual — see notes)
-Next action    : Set up the Win11 VM (tasks 1.5-1.10), then explore
-                 aero.msstyles in Resource Hacker (tasks 1.11-1.15)
-Blockers       : None
+Last worked on : 2026-09-10
+Last completed : Win11 VM fully installed and running (MyTheme-Win11-Test),
+                 Guest Additions + SecureUxTheme 4.0.0 + Resource Hacker
+                 installed in-VM, aero.msstyles copied to theme-files/base/.
+                 Automation now goes through VBoxManage guestcontrol
+                 (copyto/copyfrom + run) rather than keyboard injection —
+                 reliable at the desktop, but Windows Setup's own GUI
+                 wouldn't accept injected input, so OS install/OOBE and any
+                 admin-elevation-requiring step still needs a human click.
+Currently on   : Phase 1 — reference theme research and aero.msstyles
+                 exploration in Resource Hacker (both need visual/GUI work)
+Next action    : Download 2-3 reference themes from DeviantArt (1.11),
+                 then explore aero.msstyles + reference themes in Resource
+                 Hacker to find bitmap resource IDs (1.12, 1.14) and fill
+                 in MEMORY.md's Bitmap Dimension Reference (1.15)
+Blockers       : None — Phase 1 is nearly done, just the GUI-exploration
+                 tasks left before Phase 2 (Design System) can start
 ```
 
 ---
@@ -50,21 +59,21 @@ Blockers       : None
 | # | Task | Status | Notes |
 |---|---|---|---|
 | 1.1 | Run folder scaffolding script | ✅ Done | `scripts/powershell/scaffold.ps1` generated and run |
-| 1.2 | Download Resource Hacker | ⬜ Not started | rhsoftware.net — manual download, needed inside the VM |
+| 1.2 | Download Resource Hacker | ✅ Done | Portable extraction in VM at `C:\Users\Gouda\Tools\ResourceHacker\ResourceHacker.exe` |
 | 1.3 | Download GIMP 2.10+ | ✅ Done | Installed globally via `winget install GIMP.GIMP` |
-| 1.4 | Create Figma free account | ⬜ Not started | figma.com |
+| 1.4 | Create Figma free account | ⬜ Not started | figma.com — your call, browser signup |
 | 1.5 | Download VirtualBox | ✅ Done | Installed globally via `winget install Oracle.VirtualBox` (7.2.16) |
-| 1.6 | Download Windows 11 evaluation ISO | 🔨 In progress | Win11 25H2 Pro ISO downloading via BITS to `iTheme_Win11_VM\iso\` |
-| 1.7 | Create and configure Win11 VM | 🔨 In progress | `iTheme_Win11_VM\create-vm.ps1` written (4GB RAM, 64GB disk, UEFI+TPM2.0+Secure Boot, unattended install) — awaiting ISO |
-| 1.8 | Download & install SecureUxTheme on VM | ⬜ Not started | github.com/namazso/SecureUxTheme — after VM boots |
-| 1.9 | Install Resource Hacker on VM | ⬜ Not started | rhsoftware.net — after VM boots |
-| 1.10 | Set up VirtualBox shared folder → theme-files/ | ✅ Done | Configured in `create-vm.ps1` as shared folder "win11-theme" -> repo root, automount |
+| 1.6 | Download Windows 11 evaluation ISO | ✅ Done | Win11 25H2 Pro ISO downloaded and installed |
+| 1.7 | Create and configure Win11 VM | ✅ Done | `MyTheme-Win11-Test` running, Windows 11 fully installed, local account login working |
+| 1.8 | Download & install SecureUxTheme on VM | ✅ Done | v4.0.0 installed and verified via registry |
+| 1.9 | Install Resource Hacker on VM | ✅ Done | Portable install, no admin rights needed |
+| 1.10 | Set up VirtualBox shared folder → theme-files/ | ✅ Done | Mounted as Z: in guest; automation uses `guestcontrol copyto/copyfrom` instead (more reliable, no per-session drive quirks) |
 | 1.11 | Download 2–3 reference themes from DeviantArt | ⬜ Not started | Search "windows 11 theme msstyles" |
 | 1.12 | Open reference themes in Resource Hacker — study structure | ⬜ Not started | Note which resource types exist (BITMAP, String Table, etc.) |
-| 1.13 | Copy aero.msstyles to theme-files/base/ | ⬜ Not started | Path: `C:\Windows\Resources\Themes\aero\aero.msstyles` |
+| 1.13 | Copy aero.msstyles to theme-files/base/ | ✅ Done | Copied via `guestcontrol copyfrom`, 1.86MB, at `theme-files/base/aero.msstyles` |
 | 1.14 | Open aero.msstyles in Resource Hacker — explore | ⬜ Not started | Note down bitmap IDs for title bar, scrollbar, buttons |
 | 1.15 | Fill in Bitmap Dimension Reference in MEMORY.md | ⬜ Not started | Note dimensions as you find them |
-| 1.16 | Initialize Git repo and make first commit | 🔨 In progress | `git init` done, all files staged — first commit awaiting your go-ahead |
+| 1.16 | Initialize Git repo and make first commit | ✅ Done | Pushed to github.com/mg-gouda/itheme-win11 |
 
 **Phase 1 Complete when:** All tools installed, VM running with SecureUxTheme, aero.msstyles explored, first commit made.
 
