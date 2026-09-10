@@ -21,67 +21,111 @@ the technical foundation for Phase 3.
 
 ## aero.msstyles — Resource Structure
 
-> Discovered during Phase 1 exploration. Fill in as you explore.
+> Discovered during Phase 1 exploration (2026-09-10, Windows 11 25H2, build
+> 10.0.26200.8037). **This is the modern Vista+ theme engine format, not the
+> classic Win9x/XP BITMAP-resource format this doc originally assumed** — see
+> "IMPORTANT: theme format reality check" below before doing anything else.
 
-### Resource Types Found
+### Resource Types Found (actual tree in Resource Hacker)
 
 | Type | Count | Description |
 |---|---|---|
-| BITMAP | TBD | Graphical elements (title bars, buttons, etc.) |
-| String Table | TBD | Color values, text strings |
-| IMAGE | TBD | Additional image resources |
-| RCDATA | TBD | Raw data sections |
-| _OTHER_ | TBD | |
+| AMAP | 1 | Alpha map — likely opacity/blend table |
+| BCMAP | ? | Border/color map (not yet explored) |
+| CMAP | ? | Color map (not yet explored) |
+| DESKTOP | ? | Desktop-related settings (not yet explored) |
+| IMAGE | 1611 | The actual PNG bitmaps. IDs run 508–2125 (with gaps), all sub-ID 1033 (LANGID for en-US) |
+| IMMERSIVE | 1 | Single UCS-2/binary resource — modern Fluent/WinUI theming data (see below) |
+| MINCOLORDEPTH | 1 | Minimum color depth requirement |
+| MUI | ? | Localized strings (not yet explored) |
+| PACKTHEM_VERSION | ? | Theme package version metadata |
+| PVL | ? | Not yet explored |
+| RMAP | ? | Resource map — likely PART/STATE → IMAGE ID lookup (not yet explored) |
+| STREAM | ? | Binary theme definition data — the actual "compiled style". Not human-readable in Resource Hacker; this is where PART/STATE really gets tied to IMAGE IDs |
+| VARIANT | ? | Color/size variant definitions |
+| VMAP | ? | Not yet explored |
+| Version Info | 1 | Standard PE version resource |
+
+**No `BITMAP` or `String Table` resource types exist in this file at all.**
+Everything visual is a PNG under `IMAGE`. Color strings (`ActiveTitle`,
+`ButtonFace`, etc.) live in the `.theme` INI file instead, not inside the
+`.msstyles` binary — that part of the original plan is correct.
 
 ---
 
-## Bitmap Resource IDs Discovered
+## IMPORTANT: theme format reality check
 
-> This is the most important section. Record every BITMAP ID you find.
-> This directly feeds into MEMORY.md component map and docs/mod-log.md.
+Windows 11's `aero.msstyles` is **not** simple "one bitmap per UI element"
+like classic visual styles. Sampled ~25 of the 1611 `IMAGE` entries by paging
+through Resource Hacker (IDs 508 through 2125):
 
-### Window Chrome IDs
+- Low IDs (508–650ish): checkbox / radio button / expander-arrow sprite
+  sheets — multiple states stacked vertically in one PNG (e.g. ID 508 is a
+  13×260 PNG containing unchecked/checked/indeterminate/hover states for a
+  checkbox). **These are genuinely swappable, matches the original plan.**
+- Mid-to-high IDs (1000+): shrink down to small glyphs (chevrons, arrows,
+  9×15px dropdown indicators) and eventually to **1×1 and 2×1 pixel PNGs** —
+  these are solid-color fill swatches, not graphics.
+- **No large title-bar-sized or window-border-sized bitmaps were found
+  anywhere in the sampled range.** Classic Aero glass (Vista/7) rendered
+  title bars from big pre-drawn bitmaps; Windows 11 does not work that way.
 
-| Resource ID | Sublevel | What it is | Dimensions | Bit depth |
-|---|---|---|---|---|
-| | 1033 | | | |
-| | 1033 | | | |
+**What this means:** window chrome (title bar, window border, the colored
+strip behind the caption buttons) is composited by DWM at runtime from
+accent-color settings and the `IMMERSIVE` resource (modern Fluent theming
+data, serialized as UCS-2/binary — not a simple bitmap or readable XML in
+Resource Hacker's text view), not from a paintable bitmap image the way
+`ASSETS.md`'s `title-bar-active.xcf` / `window-border-active.xcf` entries
+assume. Recoloring the title bar almost certainly means editing small
+fill-color swatches and/or `.theme` `[Colors]` values and DWM accent
+settings, **not** drawing a custom 800×30 title bar graphic in GIMP.
 
-### Scrollbar IDs
+**Tool note:** [msstyleEditor](https://github.com/nptr/msstyleEditor)
+(community tool, MIT, supports Vista–11) fails to open this exact file with
+`Error loading style! ... Style contains no class map!` — likely a version
+mismatch between the tool (last release tag `2.1.2.0`) and this Windows 11
+25H2 build's compiled style format. Installed at
+`C:\Users\Gouda\Tools\msstyleEditor\` in the VM in case a future version
+fixes this — worth retrying if the tool gets updated.
 
-| Resource ID | Sublevel | What it is | Dimensions | Bit depth |
-|---|---|---|---|---|
-| | 1033 | | | |
+**Before starting Phase 3 (Base Theme Build), re-scope which elements are
+realistically bitmap-editable** (checkboxes, radio buttons, scrollbar
+thumbs/arrows, button states, menu separators/arrows — all confirmed as
+swappable sprite sheets) **vs. which need a DWM/accent-color/fill-swatch
+approach instead** (title bar, window border, taskbar background). This
+probably means revising `ASSETS.md`'s asset list before Phase 3, not just
+filling in IDs for what's already listed there.
 
-### Button IDs
+---
 
-| Resource ID | Sublevel | What it is | Dimensions | Bit depth |
-|---|---|---|---|---|
-| | 1033 | | | |
+## IMAGE Resource IDs Discovered
 
-### Checkbox / Radio IDs
+> Renamed from "Bitmap Resource IDs" — the resource type is `IMAGE` (PNG),
+> not `BITMAP`, in this file. All entries below are sub-ID 1033.
+> Found by paging through Resource Hacker's IMAGE tree (508–2125), not an
+> exhaustive scan — only ~25 of 1611 entries sampled so far. Each sprite
+> sheet holds multiple states stacked vertically (normal/hover/pressed/etc.)
+> in one PNG, not separate images per state.
 
-| Resource ID | Sublevel | What it is | Dimensions | Bit depth |
-|---|---|---|---|---|
-| | 1033 | | | |
+| Resource ID | What it is | Dimensions | Notes |
+|---|---|---|---|
+| 508 | Checkbox states sprite sheet | 13×260 PNG | unchecked/checked/indeterminate + hover variants, 20px per state |
+| 509 | Checkbox states, alt size/DPI variant | 16×320 PNG | 10 states stacked |
+| 527 | Radio button states sprite sheet | 13×104 PNG | off/hover/on (blue filled) variants, 8 states |
+| 545 | Right-arrow / expander indicator | 40×200 PNG | 5 states (normal/hover/disabled/pressed/focused) |
+| 563 | Checkbox states, dark-theme color variant | 20×400 PNG | 20 states — confirms multiple color variants ship in one file |
+| 653 | Divider / separator line | 3×72 PNG | thin vertical rule, likely toolbar or menu separator |
+| 743 | Double-chevron dropdown indicator | 9×15 PNG | small "more options" style glyph |
+| 1013 | Down-chevron | 24×26 PNG | |
+| 1377 | Solid-color fill swatch | 2×1 PNG | not a graphic — a tintable fill color |
+| 1830 | Solid-color fill swatch | 1×1 PNG | same pattern as 1377, further into the ID range |
 
-### Progress Bar IDs
-
-| Resource ID | Sublevel | What it is | Dimensions | Bit depth |
-|---|---|---|---|---|
-| | 1033 | | | |
-
-### Menu IDs
-
-| Resource ID | Sublevel | What it is | Dimensions | Bit depth |
-|---|---|---|---|---|
-| | 1033 | | | |
-
-### Taskbar IDs
-
-| Resource ID | Sublevel | What it is | Dimensions | Bit depth |
-|---|---|---|---|---|
-| | 1033 | | | |
+**Not yet found/identified:** title bar, window border, close/min/max
+buttons, scrollbar track/thumb/arrows, push button states, progress bar,
+menu background/highlight, taskbar background. Per the "theme format
+reality check" above, some of these (title bar, window border, taskbar)
+may not exist as large bitmaps at all — needs the STREAM/RMAP data decoded
+or a working class-map tool to confirm rather than more manual paging.
 
 ---
 
@@ -132,7 +176,18 @@ the technical foundation for Phase 3.
 ## Tools Notes
 
 ### Resource Hacker Tips
-- [ ] Fill in during Phase 1
+- File → Open dialog remembers the last-browsed folder, so it lands back in
+  `aero`'s theme folder on subsequent opens — convenient for re-opening
+  after a crash/restart.
+- Selecting an IMAGE entry shows exact PNG dimensions and format in the
+  status bar at the bottom (e.g. "13 x 260 PNG") — no need to export just
+  to check size.
+- BMP export format note (`GIMP Notes` below) doesn't actually apply to this
+  file — see the "theme format reality check" section above. This file's
+  images are PNG, not BMP.
+- Launching `ResourceHacker.exe "<path>"` from the command line does **not**
+  reliably auto-open the file in this build — had to use File → Open every
+  time. Worth knowing if scripting VM automation around it.
 
 ### GIMP Notes for .msstyles Bitmaps
 - Export must be: File → Export As → .bmp (not "Save As")
